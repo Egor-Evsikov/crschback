@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  db:
+    build: ./src/db
+    container_name: psql
+    restart: always
+    environment:
+      POSTGRES_USER: Egrik
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: pg
+    ports:
+      - "5432:5432"
+    volumes:
+     - ./src/db/data:/var/lib/postgresql/data
