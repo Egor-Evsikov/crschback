@@ -4,61 +4,42 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 
-	"github.com/ilyakaznacheev/cleanenv"
 	_ "github.com/lib/pq"
 )
 
-//docker exec -it pg psql -U Egrik -d pgbd заход в бдшку
+//docker exec -it pg psql -U Egrik -d pg заход в бдшку
 
-type DbConfig struct {
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
-	Host     string `yaml:"host"`
-	Port     string `yaml:"port"`
-	SslMode  string `yaml:"sslMode"`
+// * Абстракция на бд
+type Repo struct {
+	*sql.DB
 }
 
-//"user=Egrik password=n dbname=pgdb host=localhost port=8888 sslmode=disable"
-
-func LoadDBConfig(path string) (*DbConfig, error) {
-
-	if path == "" {
-		log.Fatal("no path")
-	}
-
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		log.Fatal("файл не найден ", err)
-	}
-
-	var cfg DbConfig
-
-	if err := cleanenv.ReadConfig(path, &cfg); err != nil {
-		log.Fatal("Не считал конфиг ", err)
-	}
-
-	return &cfg, nil
-}
-
-func ConnDB(conf DbConfig) (*sql.DB, error) {
+// * Подключение к дб и подгрузка конфигов
+func ConnDB(conf *DbConfig) (*Repo, error) {
 
 	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=%s", conf.User, conf.Password, conf.Name, conf.Host, conf.Port, conf.SslMode)
-	log.Print(connStr)
+	log.Println("Данные конфига бд ", connStr)
 
 	db, err := sql.Open("postgres", connStr)
-
 	if err != nil {
-		log.Fatal("при открытии бд", err)
+		return nil, err
 	}
 
-	CreateTable(db)
+	r := NewRepo(db)
+	r.CreateTable()
 
-	return db, db.Ping()
+	return r, r.Ping()
 }
 
-func CreateTable(db *sql.DB) {
+// * Инициализация кастомной бд
+func NewRepo(s *sql.DB) *Repo {
+	return &Repo{s}
+}
+
+// * функции работы с кастомной бд
+// * Создание таблиц
+func (s *Repo) CreateTable() error {
 	tableUsers := `CREATE TABLE IF NOT EXISTS users (
 		id SERIAL PRIMARY KEY,
 		login VARCHAR(50) NOT NULL UNIQUE,
@@ -81,40 +62,47 @@ func CreateTable(db *sql.DB) {
 		cost NUMERIC(5,2) DEFAULT 0,
 		id_directory INT NOT NULL REFERENCES directories(id) ON DELETE CASCADE
 	)`
-	_, err := db.Exec(tableUsers)
+	_, err := s.Exec(tableUsers)
 	if err != nil {
-		log.Fatal("ошибка создания таблицы1 ", err)
+		return err
 	}
 
-	_, err = db.Exec(tableDir)
+	_, err = s.Exec(tableDir)
 	if err != nil {
-		log.Fatal("ошибка создания таблицы2 ", err)
+		return err
 	}
 
-	_, err = db.Exec(tableDirUsers)
+	_, err = s.Exec(tableDirUsers)
 	if err != nil {
-		log.Fatal("ошибка создания таблицы3 ", err)
+		return err
 	}
 
-	_, err = db.Exec(tableMeds)
+	_, err = s.Exec(tableMeds)
 	if err != nil {
-		log.Fatal("ошибка создания таблицы4 ", err)
+		return err
 	}
-
+	return nil
 }
 
-func SaveUser(dtbs *sql.DB, login string, password string) {
-	insertStr := "INSERT INTO users(login, password) VALUES ( $1, $2 )"
+// * Сохранение пользователя
+func (s *Repo) SaveUser(login string, password string) error {
 
-	stmt, err := dtbs.Prepare(insertStr)
+	insertStr := "INSERT INTO users(login, password) VALUES ( $1, $2 )"
+	stmt, err := s.Prepare(insertStr)
 	if err != nil {
-		log.Fatal("mistake1 ", err)
+		return err
 	}
 
 	defer stmt.Close()
 
 	if _, err = stmt.Exec(login, password); err != nil {
-		log.Fatal("mistake2 ", err)
+		return err
 	}
+
+	return nil
+}
+
+// * Проверка наличия пользователя
+func (s *Repo) CheckUser(login string) {
 
 }
