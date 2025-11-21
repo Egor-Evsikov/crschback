@@ -7,7 +7,7 @@ type User struct {
 
 func NewUser(log string, pass string) User {
 	return User{
-		log,
-		pass,
+		Login:    log,
+		Password: pass,
 	}
 }
